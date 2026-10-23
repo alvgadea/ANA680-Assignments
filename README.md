@@ -7,4 +7,4 @@ Jesus Adrian Alvarado Gadea, National University
 | [ClassificationModels_BreastCancer](ClassificationModels_BreastCancer) | Building Classification Models. Eight classifiers on the UCI Breast Cancer Wisconsin data, each in its own Python file, with a Word table of the results |
 | [ANNClassifier_BankChurn](ANNClassifier_BankChurn) | Design a Three-Layered ANN Classifier. A TensorFlow and Keras network that predicts bank customer churn |
 
-Each folder has its own README with run instructions and results. Python 3.12 or 3.13 is recommended.
+Each folder has its own README with run instructions and results.
