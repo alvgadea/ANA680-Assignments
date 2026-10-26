@@ -1,0 +1,54 @@
+# CI/CD for the Assignment 4 Flask app: retrain the model, test the app, then
+# deploy the FlaskApp_BreastCancer folder to Heroku whenever that folder changes.
+name: Breast cancer app CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "FlaskApp_BreastCancer/**"
+      - ".github/workflows/breast_cancer_app.yaml"
+  workflow_dispatch:
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history, needed to split out the app folder
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: FlaskApp_BreastCancer/.python-version
+
+      - name: Install dependencies
+        working-directory: FlaskApp_BreastCancer
+        run: pip install -r requirements.txt
+
+      - name: Train the model
+        working-directory: FlaskApp_BreastCancer
+        run: python train_model.py
+
+      - name: Test the app
+        working-directory: FlaskApp_BreastCancer
+        run: python test_app.py
+
+      - name: Deploy the app folder to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+        run: |
+          if [ -z "$HEROKU_API_KEY" ] || [ -z "$HEROKU_APP_NAME" ]; then
+            echo "::warning::Heroku secrets are not set yet, so the deploy step is skipped."
+            exit 0
+          fi
+          # Include the model trained in this run (the commit stays local to the runner)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f FlaskApp_BreastCancer/model.pkl
+          git commit -m "Model trained by GitHub Actions" || echo "Model unchanged"
+          SPLIT=$(git subtree split --prefix FlaskApp_BreastCancer HEAD)
+          git push --force "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP_NAME}.git" "$SPLIT:refs/heads/main"
