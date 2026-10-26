@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Breast Cancer Prediction</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; }
+    label { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
+    input { width: 70px; }
+    button { margin-top: 12px; padding: 6px 16px; }
+    .result { margin-top: 16px; font-size: 1.2em; }
+    .error { color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>Breast Cancer Prediction</h1>
+  <p>Enter each cell measurement on its 1 to 10 scale.</p>
+
+  <form action="/predict" method="post">
+    {% for name, label in features %}
+    <label>{{ label }}
+      <input type="number" name="{{ name }}" min="1" max="10" step="1" required value="{{ values.get(name, '') }}">
+    </label>
+    {% endfor %}
+    <button type="submit">Predict</button>
+  </form>
+
+  {% if error %}
+  <p class="error">{{ error }}</p>
+  {% endif %}
+  {% if result %}
+  <p class="result">Prediction: <strong>{{ result }}</strong> (probability of malignancy {{ probability }})</p>
+  {% endif %}
+</body>
+</html>
