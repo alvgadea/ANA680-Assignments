@@ -1,0 +1,65 @@
+# CI/CD for the Assignment 5 Docker app: run the notebook to train the model, build the
+# container image and test it, then deploy the DockerApp_WineQuality folder to Heroku,
+# which builds and runs the same Dockerfile.
+name: Wine quality app CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "DockerApp_WineQuality/**"
+      - ".github/workflows/wine_quality_app.yaml"
+  workflow_dispatch:
+
+jobs:
+  train-build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history, needed to split out the app folder
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Run the notebook to train the model
+        working-directory: DockerApp_WineQuality
+        run: |
+          pip install -r requirements.txt pandas==3.1.0 matplotlib==3.11.2 nbconvert ipykernel
+          jupyter nbconvert --to notebook --execute --inplace wine_quality_model.ipynb
+
+      - name: Build the Docker image
+        run: docker build -t wine-quality-app DockerApp_WineQuality
+
+      - name: Run the container and test it
+        run: |
+          docker run -d --name wine-app -e PORT=8000 -p 8000:8000 wine-quality-app
+          python3 DockerApp_WineQuality/test_app.py http://localhost:8000 || { docker logs wine-app; exit 1; }
+
+      - name: Deploy the app folder to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ secrets.HEROKU_WINE_APP_NAME }}
+        run: |
+          if [ -z "$HEROKU_API_KEY" ] || [ -z "$HEROKU_APP_NAME" ]; then
+            echo "::warning::Heroku secrets are not set yet, so the deploy step is skipped."
+            exit 0
+          fi
+          # Create the app on Heroku's container stack the first time, or switch an existing app to it,
+          # so Heroku builds the image from the Dockerfile (see heroku.yml)
+          H=(-H "Accept: application/vnd.heroku+json; version=3" -H "Authorization: Bearer ${HEROKU_API_KEY}" -H "Content-Type: application/json")
+          if curl --silent --fail -o /dev/null "${H[@]}" "https://api.heroku.com/apps/${HEROKU_APP_NAME}"; then
+            curl --fail --silent --show-error -o /dev/null -X PATCH "${H[@]}" "https://api.heroku.com/apps/${HEROKU_APP_NAME}" -d '{"build_stack": "container"}'
+          else
+            curl --fail --silent --show-error -o /dev/null -X POST "${H[@]}" "https://api.heroku.com/apps" -d "{\"name\": \"${HEROKU_APP_NAME}\", \"stack\": \"container\"}"
+          fi
+          # Include the model trained in this run (the commit stays local to the runner)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f DockerApp_WineQuality/model.joblib
+          git commit -m "Model trained by GitHub Actions" || echo "Model unchanged"
+          SPLIT=$(git subtree split --prefix DockerApp_WineQuality HEAD)
+          git push --force "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP_NAME}.git" "$SPLIT:refs/heads/main"
